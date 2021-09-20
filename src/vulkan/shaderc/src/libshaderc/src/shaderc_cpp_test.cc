@@ -363,7 +363,7 @@ TEST_F(CppInterface, D_DisassemblyOption) {
   const AssemblyCompilationResult result = compiler_.CompileGlslToSpvAssembly(
       kMinimalShader, shaderc_glsl_vertex_shader, "shader", options_);
   EXPECT_TRUE(CompilationResultIsSuccess(result));
-  // This should work with both the glslang native disassembly format and the
+  // This should work with both the glslang disassembly format and the
   // SPIR-V Tools assembly format.
   EXPECT_THAT(CompilerOutputAsString(result), HasSubstr("Capability Shader"));
   EXPECT_THAT(CompilerOutputAsString(result), HasSubstr("MemoryModel"));
@@ -1033,10 +1033,9 @@ TEST_F(CppInterface, TargetEnvCompileOptionsOpenGLCompatibilityShadersFail) {
        }
   )";
 
-  EXPECT_THAT(
-      CompilationErrors(kGlslShader, shaderc_glsl_fragment_shader, options_),
-      HasSubstr(
-          "compilation for SPIR-V does not support the compatibility profile"));
+  const auto errors =
+      CompilationErrors(kGlslShader, shaderc_glsl_fragment_shader, options_);
+  EXPECT_EQ(errors, "error: OpenGL compatibility profile is not supported");
 }
 
 std::string BarrierComputeShader() {

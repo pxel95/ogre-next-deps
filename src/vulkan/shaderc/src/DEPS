@@ -5,12 +5,11 @@ vars = {
   'khronos_git': 'https://github.com/KhronosGroup',
 
   'effcee_revision' : '2ec8f8738118cc483b67c04a759fee53496c5659',
-  'glslang_revision': '3ee5f2f1d3316e228916788b300d786bb574d337',
-  'googletest_revision': 'a781fe29bcf73003559a3583167fe3d647518464',
-  're2_revision': 'ca11026a032ce2a3de4b3c389ee53d2bdc8794d6',
-  'spirv_headers_revision': '979924c8bc839e4cb1b69d03d48398551f369ce7',
-  'spirv_tools_revision': '969f0286479b89267b6c89f6d5223285c265e6ae',
-  'spirv_cross_revision': '6575e451f5bffded6e308988362224dd076b0f2b',
+  'glslang_revision': 'a4599ef7561abed83d45bab4c7492daeceef92a5',
+  'googletest_revision': '389cb68b87193358358ae87cc56d257fd0d80189',
+  're2_revision': '7107ebc4fbf7205151d8d2a57b2fc6e7853125d4',
+  'spirv_headers_revision': '449bc986ba6f4c5e10e32828783f9daef2a77644',
+  'spirv_tools_revision': '1fbed83c8aab8517d821fcb4164c08567951938f',
 }
 
 deps = {
@@ -31,7 +30,4 @@ deps = {
 
   'third_party/spirv-tools': Var('khronos_git') + '/SPIRV-Tools.git@' +
       Var('spirv_tools_revision'),
-
-  'third_party/spirv-cross': Var('khronos_git') + '/SPIRV-Cross.git@' +
-      Var('spirv_cross_revision'),
 }
