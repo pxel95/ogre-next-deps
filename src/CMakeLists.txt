@@ -7,6 +7,13 @@ if (WIN32)
   option(OGREDEPS_BUILD_NVIDIA_NVAPI "Build NVIDIA NVAPI dependency" TRUE)
   option(OGREDEPS_BUILD_SDL2 "Build SDL2 dependency" TRUE)
 endif ()
+if (APPLE AND NOT OGRE_BUILD_PLATFORM_APPLE_IOS)
+  # Disabled by default because it causes problems with XCode 13.4.1:
+  #
+  # clang: warning: libstdc++ is deprecated; move to libc++ with a minimum deployment target of OS X 10.9 [-Wdeprecated]
+  # ld: library not found for -lstdc++
+  option(OGREDEPS_BUILD_SDL2 "Build SDL2 dependency" FALSE)
+endif ()
 option(OGREDEPS_BUILD_FREEIMAGE "Build FreeImage dependency" TRUE)
 option(OGREDEPS_BUILD_FREETYPE "Build FreeType dependency" TRUE)
 option(OGREDEPS_BUILD_ZLIB "Build zlib dependency" TRUE)
@@ -17,9 +24,9 @@ if( NOT ANDROID )
 		option(OGREDEPS_BUILD_OPENVR "Install prebuilt OpenVR dependency" TRUE)
 	endif()
 	option(OGREDEPS_BUILD_REMOTERY "Build Remotery dependency" TRUE)
-	option(OGREDEPS_BUILD_RENDERDOC "Build RenderDoc dependency" TRUE)
 endif()
 if( NOT APPLE )
+	option(OGREDEPS_BUILD_RENDERDOC "Build RenderDoc dependency" TRUE)
 	option(OGREDEPS_BUILD_SHADERC "Build Vulkan's shaderc dependency" TRUE)
 endif()
 option(OGREDEPS_INSTALL_DEV "Install development headers and libraries" TRUE)
@@ -31,11 +38,13 @@ mark_as_advanced(OGREDEPS_LIB_DIRECTORY)
 if (NOT OGREDEPS_RUNTIME_OUTPUT)
   set(OGREDEPS_RUNTIME_OUTPUT ${OGREDEPS_BINARY_DIR}/bin)
 endif ()
-if (WIN32 OR (APPLE AND NOT OGRE_BUILD_PLATFORM_APPLE_IOS))
+if (WIN32 OR APPLE)
   set(OGREDEPS_RELEASE_PATH "/Release")
+  set(OGREDEPS_RELWITHDEBINFO_PATH "/RelWithDebInfo")
   set(OGREDEPS_DEBUG_PATH "/Debug")
 else ()
   set(OGREDEPS_RELEASE_PATH "")
+  set(OGREDEPS_RELWITHDEBINFO_PATH "")
   set(OGREDEPS_DEBUG_PATH "")
 endif ()
 
@@ -68,12 +77,6 @@ if ((CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANGXX) AND NOT MINGW)
   endif ()
 endif ()
 
-if(XCODE_VERSION VERSION_LESS 5.0.0)
-  set(MIN_IOS_VERSION "5.0")
-else()
-  set(MIN_IOS_VERSION "6.0")
-endif()
-
 macro(set_xcode_property targ xc_prop_name xc_prop_val)
   set_property( TARGET ${targ} PROPERTY XCODE_ATTRIBUTE_${xc_prop_name} ${xc_prop_val} )
 endmacro(set_xcode_property)
@@ -88,7 +91,7 @@ endif ()
 # enforce that CMAKE_BUILD_TYPE is set, otherwise install commands
 # will not work for Makefile based generators.
 if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: Debug, Release" FORCE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: Debug, Release, RelWithDebInfo" FORCE)
 endif ()
 
 # configure and install dependency LIBRARY
@@ -101,8 +104,8 @@ macro(install_dep LIBRARY INCLUDE_DIR)
   )
 
   if(APPLE AND OGRE_BUILD_PLATFORM_APPLE_IOS)
-    set_xcode_property( ${LIBRARY} IPHONEOS_DEPLOYMENT_TARGET ${MIN_IOS_VERSION} )
-    set_property( TARGET ${LIBRARY} PROPERTY XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET[arch=arm64] "7.0" )
+	set_xcode_property( ${LIBRARY} IPHONEOS_DEPLOYMENT_TARGET 10.0 )
+	set_property( TARGET ${LIBRARY} PROPERTY XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET[arch=arm64] "10.0" )
 
     add_custom_command(TARGET ${LIBRARY} POST_BUILD
       COMMAND mkdir -p "${OGREDEPS_BINARY_DIR}/${OGREDEPS_LIB_DIRECTORY}/$(CONFIGURATION)"
@@ -119,6 +122,11 @@ macro(install_dep LIBRARY INCLUDE_DIR)
     ARCHIVE DESTINATION "${OGREDEPS_BINARY_DIR}/notwanted" CONFIGURATIONS Release
   )
   install(TARGETS ${LIBRARY}
+    RUNTIME DESTINATION "bin${OGREDEPS_RELWITHDEBINFO_PATH}" CONFIGURATIONS RelWithDebInfo
+    LIBRARY DESTINATION "${OGREDEPS_LIB_DIRECTORY}${OGREDEPS_RELWITHDEBINFO_PATH}" CONFIGURATIONS RelWithDebInfo
+    ARCHIVE DESTINATION "${OGREDEPS_BINARY_DIR}/notwanted" CONFIGURATIONS RelWithDebInfo
+  )
+  install(TARGETS ${LIBRARY}
     RUNTIME DESTINATION "bin${OGREDEPS_DEBUG_PATH}" CONFIGURATIONS Debug
     LIBRARY DESTINATION "${OGREDEPS_LIB_DIRECTORY}${OGREDEPS_DEBUG_PATH}" CONFIGURATIONS Debug
     ARCHIVE DESTINATION "${OGREDEPS_BINARY_DIR}/notwanted" CONFIGURATIONS Debug
@@ -130,6 +138,11 @@ macro(install_dep LIBRARY INCLUDE_DIR)
       RUNTIME DESTINATION "bin${OGREDEPS_RELEASE_PATH}" CONFIGURATIONS Release
       LIBRARY DESTINATION "${OGREDEPS_LIB_DIRECTORY}${OGREDEPS_RELEASE_PATH}" CONFIGURATIONS Release
       ARCHIVE DESTINATION "${OGREDEPS_LIB_DIRECTORY}${OGREDEPS_RELEASE_PATH}" CONFIGURATIONS Release
+    )
+    install(TARGETS ${LIBRARY}
+      RUNTIME DESTINATION "bin${OGREDEPS_RELWITHDEBINFO_PATH}" CONFIGURATIONS RelWithDebInfo
+      LIBRARY DESTINATION "${OGREDEPS_LIB_DIRECTORY}${OGREDEPS_RELWITHDEBINFO_PATH}" CONFIGURATIONS RelWithDebInfo
+      ARCHIVE DESTINATION "${OGREDEPS_LIB_DIRECTORY}${OGREDEPS_RELWITHDEBINFO_PATH}" CONFIGURATIONS RelWithDebInfo
     )
     install(TARGETS ${LIBRARY}
       RUNTIME DESTINATION "bin${OGREDEPS_DEBUG_PATH}" CONFIGURATIONS Debug
@@ -170,10 +183,16 @@ if (OGREDEPS_BUILD_RENDERDOC)
 endif ()
 if (OGREDEPS_BUILD_SDL2)
   set(SDL2_CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_INSTALL_PREFIX}" "-DSDL_CMAKE_DEBUG_POSTFIX:STRING=_d")
+  if( MSVC )
+	  # Enable multi-process compilation
+	  list(APPEND SDL2_CMAKE_ARGS "-DCMAKE_CXX_FLAGS=/MP" )
+  endif()
   if (MINGW)
     list(APPEND SDL2_CMAKE_ARGS "-DDIRECTX=0")
     set(SDL2_BIN_NAME "libSDL2.dll")
     # set(SDL2_LIB_NAME "libSDL2.a")
+  elseif (APPLE AND NOT OGRE_BUILD_PLATFORM_APPLE_IOS)
+    set(SDL2_BIN_NAME "SDL2.dylib")
   else ()
     set(SDL2_BIN_NAME "SDL2.dll")
     set(SDL2_LIB_NAME "SDL2.lib")
@@ -192,19 +211,23 @@ if (OGREDEPS_BUILD_SDL2)
         --config Release
     BUILD_ALWAYS 1
   )
-  ExternalProject_Add_Step(
-    SDL2
-    MoveInstallFiles
-    COMMENT "Move SDL2 install files into the Release and Debug folders."
-    DEPENDEES install
-    WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}
-    # For MinGW, the Release & Debug directories may not yet exist.
-    COMMAND ${CMAKE_COMMAND} -E make_directory bin/Release
-    COMMAND ${CMAKE_COMMAND} -E make_directory bin/Debug
-    COMMAND ${CMAKE_COMMAND} -E rename bin/${SDL2_BIN_NAME} bin/Debug/${SDL2_BIN_NAME}
-    COMMAND ${CMAKE_COMMAND} -E copy bin/Debug/${SDL2_BIN_NAME} bin/Release/${SDL2_BIN_NAME}
-    LOG 1
+  if (NOT APPLE AND NOT OGRE_BUILD_PLATFORM_APPLE_IOS)
+    ExternalProject_Add_Step(
+      SDL2
+      MoveInstallFiles
+      COMMENT "Move SDL2 install files into the Release and Debug folders."
+      DEPENDEES install
+      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}
+      # For MinGW, the Release & Debug directories may not yet exist.
+      COMMAND ${CMAKE_COMMAND} -E make_directory bin/Release
+      COMMAND ${CMAKE_COMMAND} -E make_directory bin/RelWithDebInfo
+      COMMAND ${CMAKE_COMMAND} -E make_directory bin/Debug
+      COMMAND ${CMAKE_COMMAND} -E rename bin/${SDL2_BIN_NAME} bin/Debug/${SDL2_BIN_NAME}
+      COMMAND ${CMAKE_COMMAND} -E copy bin/Debug/${SDL2_BIN_NAME} bin/Release/${SDL2_BIN_NAME}
+      COMMAND ${CMAKE_COMMAND} -E copy bin/Debug/${SDL2_BIN_NAME} bin/RelWithDebInfo/${SDL2_BIN_NAME}
+      LOG 1
   )
+  endif ()
 endif ()
 if (OGREDEPS_BUILD_SHADERC)
 	if( WIN32 )
@@ -225,6 +248,10 @@ if (OGREDEPS_BUILD_SHADERC)
 	if( UNIX OR ANDROID )
 		set( SHADERC_CMAKE_ARGS ${SHADERC_CMAKE_ARGS}
 				"-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}" )
+	endif()
+	if( MSVC )
+		# Enable multi-process compilation
+		list( APPEND SHADERC_CMAKE_ARGS "-DCMAKE_CXX_FLAGS=/MP" )
 	endif()
 	if( ANDROID )
 		set( SHADERC_CMAKE_ARGS ${SHADERC_CMAKE_ARGS}
